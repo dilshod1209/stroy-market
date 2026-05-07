@@ -1,0 +1,76 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information including role",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["buyer", "seller", "admin"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Construction material product details",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "sellerId": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "number" },
+        "category": { "type": "string" },
+        "stock": { "type": "integer" },
+        "imageUrl": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["sellerId", "name", "price", "stock"]
+    },
+    "Cart": {
+      "title": "Cart",
+      "description": "User shopping cart",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "items": { "type": "array" }
+      },
+      "required": ["userId", "items"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Purchase order records",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "items": { "type": "array" },
+        "total": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "completed", "cancelled"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "items", "total", "status"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "Collection of user profiles"
+    },
+    "products/{productId}": {
+      "schema": "Product",
+      "description": "Collection of products available in the market"
+    },
+    "carts/{userId}": {
+      "schema": "Cart",
+      "description": "User shopping carts (one per user)"
+    },
+    "orders/{orderId}": {
+      "schema": "Order",
+      "description": "Collection of purchase orders"
+    }
+  }
+}
