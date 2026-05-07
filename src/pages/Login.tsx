@@ -21,7 +21,6 @@ export default function Login() {
 
   const [formData, setFormData] = useState({
     name: '',
-    email: '',
     phone: '',
     password: ''
   });
@@ -36,28 +35,82 @@ export default function Login() {
     setError('');
 
     try {
+      // Basic validation
+      if (formData.password.length < 6) {
+        throw new Error('Parol kamida 6 ta belgidan iborat bo\'lishi kerak');
+      }
+
       await setPersistence(auth, browserLocalPersistence);
       
+      // Internal email mapping logic
+      // We use phone number for unique identification since multiple users can have the same display name.
+      // For signup, both name and phone are required.
+      // For login, the user provides a name, and we find the associated phone/email.
+      
       if (mode === 'signup') {
-        const result = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
+        if (!formData.phone || formData.phone.length < 9) {
+          throw new Error('Iltimos to\'g\'ri telefon raqamini kiriting');
+        }
+
+        const internalEmail = `${formData.phone.replace(/[^0-9]/g, '')}@stroy.market`;
+        const result = await createUserWithEmailAndPassword(auth, internalEmail, formData.password);
         const user = result.user;
         
         await setDoc(doc(db, 'users', user.uid), {
           uid: user.uid,
-          email: user.email,
+          email: internalEmail,
           displayName: formData.name,
           phoneNumber: formData.phone,
           role: role,
           createdAt: new Date().toISOString()
         });
       } else {
-        await signInWithEmailAndPassword(auth, formData.email, formData.password);
+        // LOGIN MODE
+        const loginInput = formData.name.trim();
+        let targetEmail = '';
+
+        if (loginInput.includes('@')) {
+          targetEmail = loginInput;
+        } else if (/^\+?\d+$/.test(loginInput.replace(/\s/g, ''))) {
+          // Input looks like a phone number
+          const cleanPhone = loginInput.replace(/[^0-9]/g, '');
+          targetEmail = `${cleanPhone}@stroy.market`;
+        } else {
+          // Input is a Name. Try to find the user in Firestore.
+          try {
+            const { collection, query, where, getDocs } = await import('firebase/firestore');
+            const q = query(collection(db, 'users'), where('displayName', '==', loginInput));
+            const querySnapshot = await getDocs(q);
+            
+            if (!querySnapshot.empty) {
+              // Get the first user found with this name
+              targetEmail = querySnapshot.docs[0].data().email;
+            } else {
+              throw new Error('Ushbu ism bilan foydalanuvchi topilmadi. Iltimos telefon raqamingizni kiriting.');
+            }
+          } catch (err: any) {
+             console.error('User lookup error:', err);
+             throw new Error(err.message || 'Foydalanuvchini topishda xatolik yuz berdi');
+          }
+        }
+        
+        await signInWithEmailAndPassword(auth, targetEmail, formData.password);
       }
       
       navigate('/');
     } catch (err: any) {
-      console.error('Auth error:', err);
-      setError(err.message || 'Xatolik yuz berdi');
+      console.error('Auth logic error:', err);
+      let errorMsg = err.message || 'Xatolik yuz berdi';
+      
+      if (err.code === 'auth/network-request-failed') {
+        errorMsg = 'Tarmoq xatoligi. Iltimos internetingizni tekshiring yoki keyinroq qayta urunib ko\'ring.';
+      } else if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+        errorMsg = 'Ism, telefon yoki parol noto\'g\'ri.';
+      } else if (err.code === 'auth/email-already-in-use') {
+        errorMsg = 'Ushbu telefon raqami allaqachon ro\'yxatdan o\'tgan.';
+      }
+      
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -92,62 +145,49 @@ export default function Login() {
 
       <form onSubmit={handleAuth} className="space-y-4">
         {mode === 'signup' && (
-          <>
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              <button
-                type="button"
-                onClick={() => setRole('buyer')}
-                className={`py-3 rounded-xl border-2 text-sm font-bold transition-all ${role === 'buyer' ? 'border-orange-600 bg-orange-50 text-orange-600' : 'border-gray-100 text-gray-500'}`}
-              >
-                Xaridor
-              </button>
-              <button
-                type="button"
-                onClick={() => setRole('seller')}
-                className={`py-3 rounded-xl border-2 text-sm font-bold transition-all ${role === 'seller' ? 'border-orange-600 bg-orange-50 text-orange-600' : 'border-gray-100 text-gray-500'}`}
-              >
-                Sotuvchi
-              </button>
-            </div>
-            
-            <div className="relative">
-              <User className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-              <input
-                required
-                name="name"
-                placeholder="To'liq ismingiz"
-                value={formData.name}
-                onChange={handleInputChange}
-                className="w-full pl-12 pr-4 py-4 rounded-2xl border border-gray-100 bg-gray-50 focus:ring-2 focus:ring-orange-500 outline-none transition-all"
-              />
-            </div>
-
-            <div className="relative">
-              <Phone className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-              <input
-                required
-                name="phone"
-                placeholder="Telefon raqamingiz"
-                value={formData.phone}
-                onChange={handleInputChange}
-                className="w-full pl-12 pr-4 py-4 rounded-2xl border border-gray-100 bg-gray-50 focus:ring-2 focus:ring-orange-500 outline-none transition-all"
-              />
-            </div>
-          </>
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <button
+              type="button"
+              onClick={() => setRole('buyer')}
+              className={`py-3 rounded-xl border-2 text-sm font-bold transition-all ${role === 'buyer' ? 'border-orange-600 bg-orange-50 text-orange-600' : 'border-gray-100 text-gray-500'}`}
+            >
+              Xaridor
+            </button>
+            <button
+              type="button"
+              onClick={() => setRole('seller')}
+              className={`py-3 rounded-xl border-2 text-sm font-bold transition-all ${role === 'seller' ? 'border-orange-600 bg-orange-50 text-orange-600' : 'border-gray-100 text-gray-500'}`}
+            >
+              Sotuvchi
+            </button>
+          </div>
         )}
 
         <div className="relative">
-          <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+          <User className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
           <input
             required
-            type="email"
-            name="email"
-            placeholder="Email manzilingiz"
-            value={formData.email}
+            name="name"
+            placeholder={mode === 'signup' ? "To'liq ismingiz" : "Ismingiz yoki Telefon"}
+            value={formData.name}
             onChange={handleInputChange}
             className="w-full pl-12 pr-4 py-4 rounded-2xl border border-gray-100 bg-gray-50 focus:ring-2 focus:ring-orange-500 outline-none transition-all"
           />
         </div>
+
+        {mode === 'signup' && (
+          <div className="relative">
+            <Phone className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+            <input
+              required
+              name="phone"
+              placeholder="Telefon raqamingiz"
+              value={formData.phone}
+              onChange={handleInputChange}
+              className="w-full pl-12 pr-4 py-4 rounded-2xl border border-gray-100 bg-gray-50 focus:ring-2 focus:ring-orange-500 outline-none transition-all"
+            />
+          </div>
+        )}
 
         <div className="relative">
           <Key className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
@@ -162,7 +202,7 @@ export default function Login() {
           />
         </div>
 
-        {error && <p className="text-red-500 text-xs font-bold text-center">{error}</p>}
+        {error && <p className="text-red-500 text-xs font-bold text-center bg-red-50 p-2 rounded-xl">{error}</p>}
 
         <button
           type="submit"

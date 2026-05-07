@@ -3,7 +3,26 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>My Google AI Studio App</title>
+    <title>Stroy-Market</title>
+    <script>
+      (function() {
+        const originalFetch = window.fetch;
+        try {
+          Object.defineProperty(window, 'fetch', {
+            configurable: false,
+            enumerable: true,
+            get: function() { return originalFetch; },
+            set: function(v) { 
+              console.error('DETECTED ATTEMPT TO OVERWRITE FETCH:', v);
+              // We could throw here, but that's what the browser is already doing
+            }
+          });
+          console.log('Fetch has been locked to prevent overwrites.');
+        } catch (e) {
+          console.warn('Could not lock fetch:', e);
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
